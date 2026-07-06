@@ -268,63 +268,84 @@
     }
 
     async function loadLedger() {
-      const res = await fetch(apiUrl(), { headers: headers() });
+      try {
+        setStatus("Laster data...", "muted");
+        const res = await fetch(apiUrl(), { headers: headers() });
 
-      if (res.status === 404) {
-        fileSha = null;
-        els.ledger.value = initialLedger();
-        await saveLedger("Initialize ledger");
-        setStatus("Datafil opprettet.", "ok");
-        return;
+        if (res.status === 404) {
+          fileSha = null;
+          els.ledger.value = initialLedger();
+          await saveLedger("Initialize ledger");
+          return;
+        }
+
+        if (!res.ok) {
+          const errorText = await res.text();
+          throw new Error(`GitHub API error: ${res.status}`);
+        }
+
+        const file = await res.json();
+        fileSha = file.sha;
+        els.ledger.value = decodeBase64(file.content);
+        render();
+        setStatus("Data lastet.", "ok");
+      } catch (err) {
+        setStatus(`Feil: ${err.message}`, "error");
+        throw err;
       }
-
-      if (!res.ok) throw new Error(await res.text());
-
-      const file = await res.json();
-      fileSha = file.sha;
-      els.ledger.value = decodeBase64(file.content);
-      render();
-      setStatus("Data lastet.", "ok");
     }
 
     async function saveLedger(message = "Update ledger") {
-      const body = {
-        message,
-        content: encodeBase64(normalizedLedger()),
-        branch: getConfig().branch
-      };
+      try {
+        setStatus("Lagrer data...", "muted");
+        const body = {
+          message,
+          content: encodeBase64(normalizedLedger()),
+          branch: getConfig().branch
+        };
 
-      if (fileSha) body.sha = fileSha;
+        if (fileSha) body.sha = fileSha;
 
-      const res = await fetch(apiUrl(false), {
-        method: "PUT",
-        headers: { ...headers(), "Content-Type": "application/json" },
-        body: JSON.stringify(body)
-      });
+        const res = await fetch(apiUrl(false), {
+          method: "PUT",
+          headers: { ...headers(), "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        });
 
-      if (!res.ok) throw new Error(await res.text());
+        if (!res.ok) {
+          const errorText = await res.text();
+          throw new Error(`GitHub API error: ${res.status}`);
+        }
 
-      const result = await res.json();
-      fileSha = result.content.sha;
-      els.ledger.value = normalizedLedger();
-      render();
-      setStatus("Data lagret.", "ok");
+        const result = await res.json();
+        fileSha = result.content.sha;
+        els.ledger.value = normalizedLedger();
+        render();
+        setStatus("Data lagret.", "ok");
+      } catch (err) {
+        setStatus(`Feil: ${err.message}`, "error");
+        throw err;
+      }
     }
 
     async function appendEvent(event, message) {
-      await loadLedger();
-
-      if (readEvents().some(existing => existing.id === event.id)) return;
-
-      els.ledger.value = `${normalizedLedger()}${JSON.stringify(event)}\n`;
-
       try {
-        await saveLedger(message);
-      } catch (err) {
-        if (!String(err.message).includes("sha")) throw err;
         await loadLedger();
+
+        if (readEvents().some(existing => existing.id === event.id)) return;
+
         els.ledger.value = `${normalizedLedger()}${JSON.stringify(event)}\n`;
-        await saveLedger(message);
+
+        try {
+          await saveLedger(message);
+        } catch (err) {
+          if (!String(err.message).includes("sha")) throw err;
+          await loadLedger();
+          els.ledger.value = `${normalizedLedger()}${JSON.stringify(event)}\n`;
+          await saveLedger(message);
+        }
+      } catch (err) {
+        setStatus(`Feil: ${err.message}`, "error");
       }
     }
 
@@ -335,7 +356,14 @@
 
     function readEvents() {
       const value = normalizedLedger().trim();
-      return value ? value.split("\n").map(line => JSON.parse(line)) : [];
+      if (!value) return [];
+      return value.split("\n").filter(line => line.trim()).map(line => {
+        try {
+          return JSON.parse(line);
+        } catch {
+          return null;
+        }
+      }).filter(event => event !== null);
     }
 
     function peopleFromEvents(events) {
@@ -439,71 +467,66 @@
     els.saveSettings.onclick = saveSettings;
 
     els.loadLedger.onclick = async () => {
-      try {
-        saveSettings();
-        await loadLedger();
-      } catch (err) {
-        setStatus(`Feil ved lasting: ${err.message}`, "error");
-      }
+      await loadLedger();
     };
 
     els.saveLedger.onclick = async () => {
-      try {
-        await saveLedger("Manual ledger update");
-      } catch (err) {
-        setStatus(`Feil ved lagring: ${err.message}`, "error");
-      }
+      await saveLedger("Manual ledger update");
     };
 
     els.addPerson.onclick = async () => {
-      try {
-        const name = els.personName.value.trim();
-        if (!name) throw new Error("Navn mangler.");
-
-        await appendEvent({
-          id: crypto.randomUUID(),
-          type: "person.added",
-          personId: slug(name),
-          name,
-          createdAt: new Date().toISOString()
-        }, `Add person: ${name}`);
-
-        els.personName.value = "";
-      } catch (err) {
-        setStatus(`Feil ved person: ${err.message}`, "error");
+      const name = els.personName.value.trim();
+      if (!name) {
+        setStatus("Navn mangler.", "error");
+        return;
       }
+
+      await appendEvent({
+        id: crypto.randomUUID(),
+        type: "person.added",
+        personId: slug(name),
+        name,
+        createdAt: new Date().toISOString()
+      }, `Add person: ${name}`);
+
+      els.personName.value = "";
     };
 
     els.addExpense.onclick = async () => {
-      try {
-        const paidBy = els.paidBy.value;
-        const amount = Number(els.amount.value);
-        const description = els.description.value.trim();
+      const paidBy = els.paidBy.value;
+      const amount = Number(els.amount.value);
+      const description = els.description.value.trim();
 
-        if (!paidBy) throw new Error("Velg hvem som betalte.");
-        if (!amount) throw new Error("Beløp mangler.");
-        if (!description) throw new Error("Beskrivelse mangler.");
-
-        const selected = [...els.participants.selectedOptions].map(option => option.value);
-        const people = peopleFromEvents(readEvents());
-        const participants = selected.length ? selected : people.map(person => person.id);
-
-        await appendEvent({
-          id: crypto.randomUUID(),
-          type: "expense.added",
-          paidBy,
-          amount,
-          currency: "NOK",
-          description,
-          shares: Object.fromEntries(participants.map(personId => [personId, 1])),
-          createdAt: new Date().toISOString()
-        }, `Add expense: ${description}`);
-
-        els.amount.value = "";
-        els.description.value = "";
-      } catch (err) {
-        setStatus(`Feil ved utgift: ${err.message}`, "error");
+      if (!paidBy) {
+        setStatus("Velg hvem som betalte.", "error");
+        return;
       }
+      if (!amount) {
+        setStatus("Beløp mangler.", "error");
+        return;
+      }
+      if (!description) {
+        setStatus("Beskrivelse mangler.", "error");
+        return;
+      }
+
+      const selected = [...els.participants.selectedOptions].map(option => option.value);
+      const people = peopleFromEvents(readEvents());
+      const participants = selected.length ? selected : people.map(person => person.id);
+
+      await appendEvent({
+        id: crypto.randomUUID(),
+        type: "expense.added",
+        paidBy,
+        amount,
+        currency: "NOK",
+        description,
+        shares: Object.fromEntries(participants.map(personId => [personId, 1])),
+        createdAt: new Date().toISOString()
+      }, `Add expense: ${description}`);
+
+      els.amount.value = "";
+      els.description.value = "";
     };
 
     els.ledger.oninput = render;
