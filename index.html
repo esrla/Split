@@ -267,6 +267,9 @@
           fileSha = null;
           const ledger = initialLedger();
           await saveLedgerContent(ledger, "Initialize ledger");
+          parseLedger(ledger);
+          render();
+          setStatus("Data lastet (ny fil opprettet).", "ok");
           return;
         }
 
