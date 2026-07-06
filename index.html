@@ -80,17 +80,10 @@
       <input id="repoUrl" value="https://github.com/esrla/Frankrike2026">
     </label>
 
-    <div class="row">
-      <label>
-        Branch
-        <input id="branch" value="main">
-      </label>
-
-      <label>
-        Datafil
-        <input id="path" value="data/ledger.jsonl">
-      </label>
-    </div>
+    <label>
+      Branch
+      <input id="branch" value="main">
+    </label>
 
     <label>
       GitHub-token
@@ -160,10 +153,11 @@
   <script>
     const $ = id => document.getElementById(id);
 
+    const LEDGER_FILE = "ledger.jsonl";
+
     const els = {
       repoUrl: $("repoUrl"),
       branch: $("branch"),
-      path: $("path"),
       token: $("token"),
       saveSettings: $("saveSettings"),
       loadLedger: $("loadLedger"),
@@ -203,14 +197,13 @@
       return {
         ...parseRepoUrl(els.repoUrl.value),
         branch: els.branch.value.trim() || "main",
-        path: els.path.value.trim() || "data/ledger.jsonl",
         token: els.token.value.trim()
       };
     }
 
     function apiUrl(includeRef = true) {
       const config = getConfig();
-      const base = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${config.path}`;
+      const base = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${LEDGER_FILE}`;
       return includeRef ? `${base}?ref=${encodeURIComponent(config.branch)}` : base;
     }
 
@@ -225,14 +218,12 @@
     function loadSettings() {
       els.repoUrl.value = localStorage.getItem("split.repoUrl") || els.repoUrl.value;
       els.branch.value = localStorage.getItem("split.branch") || els.branch.value;
-      els.path.value = localStorage.getItem("split.path") || els.path.value;
       els.token.value = localStorage.getItem("split.token") || "";
     }
 
     function saveSettings() {
       localStorage.setItem("split.repoUrl", els.repoUrl.value.trim());
       localStorage.setItem("split.branch", els.branch.value.trim());
-      localStorage.setItem("split.path", els.path.value.trim());
       localStorage.setItem("split.token", els.token.value.trim());
       setStatus("Oppsett lagret lokalt på denne mobilen.", "ok");
     }
