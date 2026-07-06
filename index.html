@@ -112,7 +112,7 @@
 
     <label>
       Navn
-      <input id="personName" placeholder="Eskil">
+      <input id="personName" placeholder="">
     </label>
 
     <button id="addPerson">Legg til person</button>
@@ -129,13 +129,13 @@
     </label>
 
     <label>
-      Beløp
-      <input id="amount" type="number" inputmode="decimal" placeholder="420">
+      Beløp (NOK)
+      <input id="amount" type="number" inputmode="decimal" placeholder="">
     </label>
 
     <label>
       Beskrivelse
-      <input id="description" placeholder="Middag">
+      <input id="description" placeholder="">
     </label>
 
     <label>
@@ -153,12 +153,6 @@
   <section class="card">
     <h2>Status</h2>
     <div id="balances" class="small"></div>
-  </section>
-
-  <section class="card">
-    <h2>Rådata</h2>
-    <textarea id="ledger" spellcheck="false"></textarea>
-    <button id="saveLedger">Lagre rådata manuelt</button>
   </section>
 
   <p id="status" class="muted"></p>
@@ -182,8 +176,6 @@
       participants: $("participants"),
       addExpense: $("addExpense"),
       balances: $("balances"),
-      ledger: $("ledger"),
-      saveLedger: $("saveLedger"),
       status: $("status")
     };
 
@@ -262,7 +254,6 @@
         id: "init",
         type: "trip.created",
         name: "Split",
-        currency: "NOK",
         createdAt: new Date().toISOString()
       })}\n`;
     }
@@ -274,19 +265,19 @@
 
         if (res.status === 404) {
           fileSha = null;
-          els.ledger.value = initialLedger();
-          await saveLedger("Initialize ledger");
+          const ledger = initialLedger();
+          await saveLedgerContent(ledger, "Initialize ledger");
           return;
         }
 
         if (!res.ok) {
-          const errorText = await res.text();
           throw new Error(`GitHub API error: ${res.status}`);
         }
 
         const file = await res.json();
         fileSha = file.sha;
-        els.ledger.value = decodeBase64(file.content);
+        const content = decodeBase64(file.content);
+        parseLedger(content);
         render();
         setStatus("Data lastet.", "ok");
       } catch (err) {
@@ -295,12 +286,12 @@
       }
     }
 
-    async function saveLedger(message = "Update ledger") {
+    async function saveLedgerContent(content, message = "Update ledger") {
       try {
         setStatus("Lagrer data...", "muted");
         const body = {
           message,
-          content: encodeBase64(normalizedLedger()),
+          content: encodeBase64(content),
           branch: getConfig().branch
         };
 
@@ -313,13 +304,12 @@
         });
 
         if (!res.ok) {
-          const errorText = await res.text();
           throw new Error(`GitHub API error: ${res.status}`);
         }
 
         const result = await res.json();
         fileSha = result.content.sha;
-        els.ledger.value = normalizedLedger();
+        parseLedger(content);
         render();
         setStatus("Data lagret.", "ok");
       } catch (err) {
@@ -328,42 +318,44 @@
       }
     }
 
+    let ledgerData = [];
+
+    function parseLedger(content) {
+      ledgerData = content
+        .trim()
+        .split("\n")
+        .filter(line => line.trim())
+        .map(line => {
+          try {
+            return JSON.parse(line);
+          } catch {
+            return null;
+          }
+        })
+        .filter(event => event !== null);
+    }
+
     async function appendEvent(event, message) {
       try {
         await loadLedger();
 
-        if (readEvents().some(existing => existing.id === event.id)) return;
+        if (ledgerData.some(existing => existing.id === event.id)) return;
 
-        els.ledger.value = `${normalizedLedger()}${JSON.stringify(event)}\n`;
+        ledgerData.push(event);
+        const content = ledgerData.map(e => JSON.stringify(e)).join("\n") + "\n";
 
         try {
-          await saveLedger(message);
+          await saveLedgerContent(content, message);
         } catch (err) {
           if (!String(err.message).includes("sha")) throw err;
           await loadLedger();
-          els.ledger.value = `${normalizedLedger()}${JSON.stringify(event)}\n`;
-          await saveLedger(message);
+          ledgerData.push(event);
+          const retryContent = ledgerData.map(e => JSON.stringify(e)).join("\n") + "\n";
+          await saveLedgerContent(retryContent, message);
         }
       } catch (err) {
         setStatus(`Feil: ${err.message}`, "error");
       }
-    }
-
-    function normalizedLedger() {
-      const value = els.ledger.value.trim();
-      return value ? `${value}\n` : "";
-    }
-
-    function readEvents() {
-      const value = normalizedLedger().trim();
-      if (!value) return [];
-      return value.split("\n").filter(line => line.trim()).map(line => {
-        try {
-          return JSON.parse(line);
-        } catch {
-          return null;
-        }
-      }).filter(event => event !== null);
     }
 
     function peopleFromEvents(events) {
@@ -405,16 +397,7 @@
     }
 
     function render() {
-      let events = [];
-
-      try {
-        events = readEvents();
-      } catch {
-        els.balances.innerHTML = "<p class='error'>Rådata inneholder ugyldig JSONL.</p>";
-        return;
-      }
-
-      const people = peopleFromEvents(events);
+      const people = peopleFromEvents(ledgerData);
 
       els.people.innerHTML = people.length
         ? people.map(person => `<li>${escapeHtml(person.name)} <span class="muted">(${escapeHtml(person.id)})</span></li>`).join("")
@@ -428,7 +411,7 @@
         .map(person => `<option value="${escapeHtml(person.id)}" selected>${escapeHtml(person.name)}</option>`)
         .join("");
 
-      const balances = calculateBalances(events);
+      const balances = calculateBalances(ledgerData);
 
       els.balances.innerHTML = balances.length
         ? `<ul>${balances.map(([personId, amount]) => `<li><b>${escapeHtml(displayName(people, personId))}</b>: ${formatMoney(amount)}</li>`).join("")}</ul>`
@@ -470,10 +453,6 @@
       await loadLedger();
     };
 
-    els.saveLedger.onclick = async () => {
-      await saveLedger("Manual ledger update");
-    };
-
     els.addPerson.onclick = async () => {
       const name = els.personName.value.trim();
       if (!name) {
@@ -511,7 +490,7 @@
       }
 
       const selected = [...els.participants.selectedOptions].map(option => option.value);
-      const people = peopleFromEvents(readEvents());
+      const people = peopleFromEvents(ledgerData);
       const participants = selected.length ? selected : people.map(person => person.id);
 
       await appendEvent({
@@ -519,7 +498,6 @@
         type: "expense.added",
         paidBy,
         amount,
-        currency: "NOK",
         description,
         shares: Object.fromEntries(participants.map(personId => [personId, 1])),
         createdAt: new Date().toISOString()
@@ -528,8 +506,6 @@
       els.amount.value = "";
       els.description.value = "";
     };
-
-    els.ledger.oninput = render;
   </script>
 </body>
 </html>
