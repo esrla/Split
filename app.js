@@ -386,7 +386,7 @@ function renderExpenseItem(event, households) {
 
 function renderSettlementItem(settlement, households) {
   const from = escapeHtml(displayName(households, settlement.householdId));
-  const total = formatMoney(-settlement.total);
+  const total = formatMoney(settlement.total);
   const details = settlement.payments
     .map(payment => `${formatMoney(payment.amount)} til ${escapeHtml(displayName(households, payment.to))}`)
     .join(", ");
