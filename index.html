@@ -52,7 +52,7 @@
   </section>
 
   <section class="card">
-    <h2>Ny utgift</h2>
+    <h2 id="expenseFormTitle">Ny utgift</h2>
 
     <label>
       Betalt av
@@ -69,11 +69,19 @@
       <input id="description" placeholder="">
     </label>
 
-    <button id="addExpense">Legg til utgift</button>
+    <div class="row">
+      <button id="addExpense">Legg til utgift</button>
+      <button id="cancelEdit" style="display:none">Avbryt</button>
+    </div>
 
     <p class="small muted">
       Alle utgifter deles automatisk mellom alle husholdninger etter vektingen under.
     </p>
+  </section>
+
+  <section class="card">
+    <h2>Utgifter</h2>
+    <ul id="expenses" class="small"></ul>
   </section>
 
   <section class="card">
