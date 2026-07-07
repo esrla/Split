@@ -59,3 +59,25 @@ textarea {
 
 ul { padding-left: 20px; }
 code { font-size: 0.95em; }
+
+.expense-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  list-style: none;
+  margin: 4px 0;
+}
+
+.expense-text { flex: 1; }
+
+.expense-actions { display: flex; gap: 4px; flex-shrink: 0; }
+
+#expenses { padding-left: 0; }
+
+.btn-icon {
+  width: auto;
+  padding: 4px 8px;
+  margin-top: 0;
+  font-size: 15px;
+  line-height: 1;
+}

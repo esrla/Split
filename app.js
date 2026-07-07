@@ -16,6 +16,9 @@ const els = {
   amount: $("amount"),
   description: $("description"),
   addExpense: $("addExpense"),
+  cancelEdit: $("cancelEdit"),
+  expenseFormTitle: $("expenseFormTitle"),
+  expenses: $("expenses"),
   weights: $("weights"),
   balances: $("balances"),
   status: $("status")
@@ -24,6 +27,7 @@ const els = {
 let fileSha = null;
 let ledgerData = [];
 let householdWeights = loadHouseholdWeights();
+let editingExpenseId = null;
 
 loadSettings();
 render();
@@ -115,7 +119,7 @@ function initialLedger() {
 async function loadLedger() {
   try {
     setStatus("Laster data...", "muted");
-    const res = await fetch(apiUrl(), { headers: headers() });
+    const res = await fetch(apiUrl(), { headers: headers(), cache: "no-store" });
 
     if (res.status === 404) {
       fileSha = null;
@@ -202,7 +206,7 @@ async function appendEvent(event, message) {
     try {
       await saveLedgerContent(content, message);
     } catch (err) {
-      if (!String(err.message).includes("sha")) throw err;
+      if (!String(err.message).includes("409") && !String(err.message).includes("sha")) throw err;
       await loadLedger();
       ledgerData.push(event);
       const retryContent = ledgerData.map(e => JSON.stringify(e)).join("\n") + "\n";
@@ -233,11 +237,21 @@ function getHouseholdWeight(householdId) {
   return parsePositiveNumberOr(householdWeights[householdId], 1);
 }
 
+function deletedExpenseIds(events) {
+  return new Set(
+    events
+      .filter(e => e.type === "expense.deleted")
+      .map(e => e.expenseId)
+  );
+}
+
 function calculateBalances(events, households) {
   const balances = new Map(households.map(household => [household.id, 0]));
+  const deleted = deletedExpenseIds(events);
 
   for (const event of events) {
     if (event.type !== "expense.added") continue;
+    if (deleted.has(event.id)) continue;
 
     const payerId = event.household;
     const amount = parsePositiveNumberOr(event.nok);
@@ -280,6 +294,25 @@ function render() {
     };
   });
 
+  const deleted = deletedExpenseIds(ledgerData);
+  const expenseEvents = ledgerData.filter(e => e.type === "expense.added" && !deleted.has(e.id));
+
+  els.expenses.innerHTML = expenseEvents.length
+    ? expenseEvents.map(e => renderExpenseItem(e, households)).join("")
+    : "<li class='muted'>Ingen utgifter ennå.</li>";
+
+  els.expenses.querySelectorAll("[data-delete-expense]").forEach(btn => {
+    btn.onclick = () => deleteExpense(btn.dataset.deleteExpense);
+  });
+
+  els.expenses.querySelectorAll("[data-edit-expense]").forEach(btn => {
+    btn.onclick = () => startEditExpense(btn.dataset.editExpense);
+  });
+
+  els.expenseFormTitle.textContent = editingExpenseId ? "Rediger utgift" : "Ny utgift";
+  els.addExpense.textContent = editingExpenseId ? "Oppdater utgift" : "Legg til utgift";
+  els.cancelEdit.style.display = editingExpenseId ? "" : "none";
+
   const balances = calculateBalances(ledgerData, households);
 
   els.balances.innerHTML = balances.length
@@ -293,6 +326,57 @@ function displayName(households, householdId) {
 
 function formatMoney(value) {
   return `${value.toFixed(2)} NOK`;
+}
+
+function renderExpenseItem(event, households) {
+  const id = escapeHtml(event.id);
+  const name = escapeHtml(displayName(households, event.household));
+  const desc = escapeHtml(event.description || "");
+  const amount = formatMoney(event.nok);
+  return `<li class="expense-item">
+    <span class="expense-text">${desc} — ${amount} <span class="muted">(${name})</span></span>
+    <span class="expense-actions">
+      <button class="btn-icon" data-edit-expense="${id}" title="Rediger">✏️</button>
+      <button class="btn-icon" data-delete-expense="${id}" title="Slett">🗑️</button>
+    </span>
+  </li>`;
+}
+
+async function deleteExpense(expenseId) {
+  const event = ledgerData.find(e => e.id === expenseId);
+  const label = event?.description || expenseId;
+  if (!confirm(`Vil du slette utgiften «${label}»?`)) return;
+
+  await appendEvent({
+    id: crypto.randomUUID(),
+    type: "expense.deleted",
+    expenseId,
+    createdAt: new Date().toISOString()
+  }, `Delete expense: ${label}`);
+}
+
+function startEditExpense(expenseId) {
+  const event = ledgerData.find(e => e.id === expenseId);
+  if (!event) return;
+
+  editingExpenseId = expenseId;
+  els.paidBy.value = event.household;
+  els.amount.value = event.nok;
+  els.description.value = event.description || "";
+
+  els.expenseFormTitle.scrollIntoView({
+    behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
+    block: "start"
+  });
+  render();
+}
+
+function cancelEditExpense() {
+  editingExpenseId = null;
+  els.paidBy.value = "";
+  els.amount.value = "";
+  els.description.value = "";
+  render();
 }
 
 function renderWeightInput(household) {
@@ -334,6 +418,8 @@ els.saveSettings.onclick = saveSettings;
 els.loadLedger.onclick = async () => {
   await loadLedger();
 };
+
+els.cancelEdit.onclick = cancelEditExpense;
 
 els.addHousehold.onclick = async () => {
   const name = els.householdName.value.trim();
@@ -378,17 +464,45 @@ els.addExpense.onclick = async () => {
 
   const households = householdsFromEvents(ledgerData);
   const household = households.find(item => item.id === paidBy);
+  const newExpenseId = crypto.randomUUID();
 
-  await appendEvent({
-    id: crypto.randomUUID(),
-    type: "expense.added",
-    household: paidBy,
-    name: household?.name || paidBy,
-    nok: amount,
-    description,
-    createdAt: new Date().toISOString()
-  }, `Add expense: ${description}`);
+  if (editingExpenseId) {
+    const oldEvent = ledgerData.find(e => e.id === editingExpenseId);
+    const oldLabel = oldEvent?.description || editingExpenseId;
+    if (!confirm(`Vil du oppdatere utgiften «${oldLabel}»?`)) return;
+
+    const deleteEvent = {
+      id: crypto.randomUUID(),
+      type: "expense.deleted",
+      expenseId: editingExpenseId,
+      createdAt: new Date().toISOString()
+    };
+    const addEvent = {
+      id: newExpenseId,
+      type: "expense.added",
+      household: paidBy,
+      name: household?.name || paidBy,
+      nok: amount,
+      description,
+      createdAt: new Date().toISOString()
+    };
+
+    editingExpenseId = null;
+    await appendEvent(deleteEvent, `Delete expense: ${oldLabel}`);
+    await appendEvent(addEvent, `Update expense: ${description}`);
+  } else {
+    await appendEvent({
+      id: newExpenseId,
+      type: "expense.added",
+      household: paidBy,
+      name: household?.name || paidBy,
+      nok: amount,
+      description,
+      createdAt: new Date().toISOString()
+    }, `Add expense: ${description}`);
+  }
 
   els.amount.value = "";
   els.description.value = "";
+  render();
 };
