@@ -21,6 +21,7 @@ const els = {
   expenses: $("expenses"),
   weights: $("weights"),
   balances: $("balances"),
+  settlements: $("settlements"),
   status: $("status")
 };
 
@@ -271,6 +272,42 @@ function calculateBalances(events, households) {
   return [...balances].sort((a, b) => b[1] - a[1]);
 }
 
+function calculateSettlements(balances) {
+  const epsilon = 0.005;
+  const creditors = balances
+    .filter(([, amount]) => amount > epsilon)
+    .map(([householdId, amount]) => ({ householdId, amount }));
+  const debtors = balances
+    .filter(([, amount]) => amount < -epsilon)
+    .map(([householdId, amount]) => ({ householdId, amount: -amount, payments: [] }));
+
+  let creditorIndex = 0;
+  let debtorIndex = 0;
+
+  while (creditorIndex < creditors.length && debtorIndex < debtors.length) {
+    const creditor = creditors[creditorIndex];
+    const debtor = debtors[debtorIndex];
+    const payment = Math.min(creditor.amount, debtor.amount);
+
+    if (payment > epsilon) {
+      debtor.payments.push({ to: creditor.householdId, amount: payment });
+      creditor.amount -= payment;
+      debtor.amount -= payment;
+    }
+
+    if (creditor.amount <= epsilon) creditorIndex += 1;
+    if (debtor.amount <= epsilon) debtorIndex += 1;
+  }
+
+  return debtors
+    .filter(debtor => debtor.payments.length > 0)
+    .map(debtor => ({
+      householdId: debtor.householdId,
+      total: debtor.payments.reduce((sum, payment) => sum + payment.amount, 0),
+      payments: debtor.payments
+    }));
+}
+
 function render() {
   const households = householdsFromEvents(ledgerData);
 
@@ -318,6 +355,11 @@ function render() {
   els.balances.innerHTML = balances.length
     ? `<ul>${balances.map(([householdId, amount]) => `<li><b>${escapeHtml(displayName(households, householdId))}</b>: ${formatMoney(amount)}</li>`).join("")}</ul>`
     : "<p class='muted'>Ingen utgifter ennå.</p>";
+
+  const settlements = calculateSettlements(balances);
+  els.settlements.innerHTML = settlements.length
+    ? `<p class="muted">Hvem skylder hvem:</p><ul>${settlements.map(settlement => renderSettlementItem(settlement, households)).join("")}</ul>`
+    : "<p class='muted'>Ingen oppgjør nødvendig.</p>";
 }
 
 function displayName(households, householdId) {
@@ -340,6 +382,16 @@ function renderExpenseItem(event, households) {
       <button class="btn-icon" data-delete-expense="${id}" title="Slett">🗑️</button>
     </span>
   </li>`;
+}
+
+function renderSettlementItem(settlement, households) {
+  const from = escapeHtml(displayName(households, settlement.householdId));
+  const total = formatMoney(settlement.total);
+  const details = settlement.payments
+    .map(payment => `${formatMoney(payment.amount)} til ${escapeHtml(displayName(households, payment.to))}`)
+    .join(", ");
+
+  return `<li><b>${from}</b>: ${total} (${details})</li>`;
 }
 
 async function deleteExpense(expenseId) {
