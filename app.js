@@ -1,6 +1,7 @@
 const $ = id => document.getElementById(id);
 
 const LEDGER_FILE = "ledger.jsonl";
+const WEIGHTS_STORAGE_KEY = "split.householdWeights";
 
 const els = {
   repoUrl: $("repoUrl"),
@@ -8,19 +9,21 @@ const els = {
   token: $("token"),
   saveSettings: $("saveSettings"),
   loadLedger: $("loadLedger"),
-  personName: $("personName"),
-  addPerson: $("addPerson"),
-  people: $("people"),
+  householdName: $("householdName"),
+  addHousehold: $("addHousehold"),
+  households: $("households"),
   paidBy: $("paidBy"),
   amount: $("amount"),
   description: $("description"),
-  participants: $("participants"),
   addExpense: $("addExpense"),
+  weights: $("weights"),
   balances: $("balances"),
   status: $("status")
 };
 
 let fileSha = null;
+let ledgerData = [];
+let householdWeights = loadHouseholdWeights();
 
 loadSettings();
 render();
@@ -56,7 +59,7 @@ function apiUrl(includeRef = true) {
 
 function headers() {
   return {
-    Authorization: `Bearer ${getConfig().token}`,
+    Authorization: "Bearer ".concat(getConfig().token),
     Accept: "application/vnd.github+json",
     "X-GitHub-Api-Version": "2022-11-28"
   };
@@ -73,6 +76,19 @@ function saveSettings() {
   localStorage.setItem("split.branch", els.branch.value.trim());
   localStorage.setItem("split.token", els.token.value.trim());
   setStatus("Oppsett lagret lokalt på denne mobilen.", "ok");
+}
+
+function loadHouseholdWeights() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(WEIGHTS_STORAGE_KEY) || "{}");
+    return stored && typeof stored === "object" ? stored : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveHouseholdWeights() {
+  localStorage.setItem(WEIGHTS_STORAGE_KEY, JSON.stringify(householdWeights));
 }
 
 function decodeBase64(value) {
@@ -159,8 +175,6 @@ async function saveLedgerContent(content, message = "Update ledger") {
   }
 }
 
-let ledgerData = [];
-
 function parseLedger(content) {
   ledgerData = content
     .trim()
@@ -199,38 +213,44 @@ async function appendEvent(event, message) {
   }
 }
 
-function peopleFromEvents(events) {
-  const people = new Map();
+function householdsFromEvents(events) {
+  const households = new Map();
 
   for (const event of events) {
-    if (event.type === "person.added") people.set(event.personId, event.name);
+    if (event.type === "household.added") households.set(event.householdId, event.name);
 
     if (event.type === "expense.added") {
-      people.set(event.paidBy, event.paidBy);
-      Object.keys(event.shares || {}).forEach(personId => people.set(personId, personId));
+      const householdId = event.household;
+      const householdName = event.name || householdId;
+      households.set(householdId, householdName);
     }
   }
 
-  return [...people].map(([id, name]) => ({ id, name }));
+  return [...households].map(([id, name]) => ({ id, name }));
 }
 
-function calculateBalances(events) {
-  const balances = new Map();
+function getHouseholdWeight(householdId) {
+  return parsePositiveNumberOr(householdWeights[householdId], 1);
+}
+
+function calculateBalances(events, households) {
+  const balances = new Map(households.map(household => [household.id, 0]));
 
   for (const event of events) {
     if (event.type !== "expense.added") continue;
 
-    const shares = event.shares || {};
-    const totalShares = Object.values(shares).reduce((sum, share) => sum + Number(share), 0);
-    if (!totalShares) continue;
+    const payerId = event.household;
+    const amount = parsePositiveNumberOr(event.nok);
+    if (!payerId || !amount) continue;
 
-    balances.set(event.paidBy, (balances.get(event.paidBy) || 0) + Number(event.amount));
+    const totalWeight = households.reduce((sum, household) => sum + getHouseholdWeight(household.id), 0);
+    if (!totalWeight) continue;
 
-    for (const [personId, share] of Object.entries(shares)) {
-      balances.set(
-        personId,
-        (balances.get(personId) || 0) - Number(event.amount) * Number(share) / totalShares
-      );
+    balances.set(payerId, (balances.get(payerId) || 0) + amount);
+
+    for (const household of households) {
+      const share = amount * getHouseholdWeight(household.id) / totalWeight;
+      balances.set(household.id, (balances.get(household.id) || 0) - share);
     }
   }
 
@@ -238,33 +258,54 @@ function calculateBalances(events) {
 }
 
 function render() {
-  const people = peopleFromEvents(ledgerData);
+  const households = householdsFromEvents(ledgerData);
 
-  els.people.innerHTML = people.length
-    ? people.map(person => `<li>${escapeHtml(person.name)} <span class="muted">(${escapeHtml(person.id)})</span></li>`).join("")
-    : "<li class='muted'>Ingen personer ennå.</li>";
+  els.households.innerHTML = households.length
+    ? households.map(household => `<li>${escapeHtml(household.name)} <span class="muted">(${escapeHtml(household.id)})</span></li>`).join("")
+    : "<li class='muted'>Ingen husholdninger ennå.</li>";
 
-  els.paidBy.innerHTML = people
-    .map(person => `<option value="${escapeHtml(person.id)}">${escapeHtml(person.name)}</option>`)
+  els.paidBy.innerHTML = households
+    .map(household => `<option value="${escapeHtml(household.id)}">${escapeHtml(household.name)}</option>`)
     .join("");
 
-  els.participants.innerHTML = people
-    .map(person => `<option value="${escapeHtml(person.id)}" selected>${escapeHtml(person.name)}</option>`)
-    .join("");
+  els.weights.innerHTML = households.length
+    ? `<p class="muted">Angi hvor mange personer det er i hver husholdning.</p><ul>${households.map(renderWeightInput).join("")}</ul>`
+    : "<p class='muted'>Legg til minst én husholdning for å sette vekting.</p>";
 
-  const balances = calculateBalances(ledgerData);
+  els.weights.querySelectorAll("[data-household-weight]").forEach(input => {
+    input.oninput = event => {
+      householdWeights[event.target.dataset.householdWeight] = parsePositiveNumberOr(event.target.value, 1);
+      saveHouseholdWeights();
+      render();
+    };
+  });
+
+  const balances = calculateBalances(ledgerData, households);
 
   els.balances.innerHTML = balances.length
-    ? `<ul>${balances.map(([personId, amount]) => `<li><b>${escapeHtml(displayName(people, personId))}</b>: ${formatMoney(amount)}</li>`).join("")}</ul>`
+    ? `<ul>${balances.map(([householdId, amount]) => `<li><b>${escapeHtml(displayName(households, householdId))}</b>: ${formatMoney(amount)}</li>`).join("")}</ul>`
     : "<p class='muted'>Ingen utgifter ennå.</p>";
 }
 
-function displayName(people, personId) {
-  return people.find(person => person.id === personId)?.name || personId;
+function displayName(households, householdId) {
+  return households.find(household => household.id === householdId)?.name || householdId;
 }
 
 function formatMoney(value) {
   return `${value.toFixed(2)} NOK`;
+}
+
+function renderWeightInput(household) {
+  const id = `weight-${escapeHtml(household.id)}`;
+  const name = escapeHtml(household.name);
+  const value = escapeHtml(String(getHouseholdWeight(household.id)));
+  const householdId = escapeHtml(household.id);
+  return `<li><label for="${id}">${name}</label><input id="${id}" data-household-weight="${householdId}" type="number" min="1" step="1" value="${value}"></li>`;
+}
+
+function parsePositiveNumberOr(value, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 function slug(value) {
@@ -294,27 +335,32 @@ els.loadLedger.onclick = async () => {
   await loadLedger();
 };
 
-els.addPerson.onclick = async () => {
-  const name = els.personName.value.trim();
+els.addHousehold.onclick = async () => {
+  const name = els.householdName.value.trim();
+  const householdId = slug(name);
   if (!name) {
     setStatus("Navn mangler.", "error");
+    return;
+  }
+  if (!householdId) {
+    setStatus("Navnet må inneholde bokstaver eller tall.", "error");
     return;
   }
 
   await appendEvent({
     id: crypto.randomUUID(),
-    type: "person.added",
-    personId: slug(name),
+    type: "household.added",
+    householdId,
     name,
     createdAt: new Date().toISOString()
-  }, `Add person: ${name}`);
+  }, `Add household: ${name}`);
 
-  els.personName.value = "";
+  els.householdName.value = "";
 };
 
 els.addExpense.onclick = async () => {
   const paidBy = els.paidBy.value;
-  const amount = Number(els.amount.value);
+  const amount = parsePositiveNumberOr(els.amount.value);
   const description = els.description.value.trim();
 
   if (!paidBy) {
@@ -322,7 +368,7 @@ els.addExpense.onclick = async () => {
     return;
   }
   if (!amount) {
-    setStatus("Beløp mangler.", "error");
+    setStatus("Beløp må være større enn 0.", "error");
     return;
   }
   if (!description) {
@@ -330,17 +376,16 @@ els.addExpense.onclick = async () => {
     return;
   }
 
-  const selected = [...els.participants.selectedOptions].map(option => option.value);
-  const people = peopleFromEvents(ledgerData);
-  const participants = selected.length ? selected : people.map(person => person.id);
+  const households = householdsFromEvents(ledgerData);
+  const household = households.find(item => item.id === paidBy);
 
   await appendEvent({
     id: crypto.randomUUID(),
     type: "expense.added",
-    paidBy,
-    amount,
+    household: paidBy,
+    name: household?.name || paidBy,
+    nok: amount,
     description,
-    shares: Object.fromEntries(participants.map(personId => [personId, 1])),
     createdAt: new Date().toISOString()
   }, `Add expense: ${description}`);
 

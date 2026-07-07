@@ -17,17 +17,17 @@ GitHub Pages
    ↓
 GitHub API
    ↓
-data/ledger.jsonl
+ledger.jsonl
 ```
 
-Alle hendelser lagres som egne linjer i `data/ledger.jsonl`.
+Alle hendelser lagres som egne linjer i `ledger.jsonl`.
 
 Eksempel:
 
 ```
 {"id":"init","type":"trip.created","name":"Split","createdAt":"2026-07-06T00:00:00.000Z"}
-{"id":"abc123","type":"person.added","personId":"eskil","name":"Eskil","createdAt":"2026-07-06T12:00:00.000Z"}
-{"id":"def456","type":"expense.added","paidBy":"eskil","amount":420,"description":"Middag","shares":{"eskil":1,"anna":1},"createdAt":"2026-07-06T18:00:00.000Z"}
+{"id":"abc123","type":"household.added","householdId":"familien-eskil","name":"Familien Eskil","createdAt":"2026-07-06T12:00:00.000Z"}
+{"id":"def456","type":"expense.added","household":"familien-eskil","name":"Familien Eskil","description":"Middag","nok":420,"createdAt":"2026-07-06T18:00:00.000Z"}
 ```
 
 Appen leser loggen, beregner saldoer lokalt i nettleseren, og skriver nye hendelser tilbake til GitHub.
@@ -50,12 +50,12 @@ Standardverdier:
 ```
 Repo:   https://github.com/esrla/Frankrike2026
 Branch: main
-Data:   data/ledger.jsonl
+Data:   ledger.jsonl
 ```
 
 Trykk deretter *Lagre oppsett* og *Last data*.
 
-Hvis `data/ledger.jsonl` ikke finnes, oppretter appen filen automatisk.
+Hvis `ledger.jsonl` ikke finnes, oppretter appen filen automatisk.
 
 ## GitHub-token
 
@@ -69,19 +69,19 @@ Contents: Read and write
 
 Tokenen lagres kun lokalt i nettleseren på enheten du bruker. Den skal ikke legges inn i repoet, og den skal ikke hardkodes i `index.html`.
 
-## Personer
+## Husholdninger
 
-Legg inn deltagerne under *Personer*.
+Legg inn husholdningene under *Husholdninger*.
 
 Eksempel:
 
 ```
-Eskil
-Anna
-Per
+Familien Eskil
+Familien Anna
+Hyttegjestene
 ```
 
-Appen lager en intern `personId` basert på navnet (slug).
+Appen lager en intern `householdId` basert på navnet (slug).
 
 ## Utgifter
 
@@ -90,24 +90,36 @@ For hver utgift legger du inn:
 * hvem som betalte
 * beløp (NOK)
 * beskrivelse
-* hvem utgiften skal deles mellom
 
-Hvis ingen personer velges under "Delt mellom", deles utgiften mellom alle.
+Alle utgifter deles automatisk mellom alle husholdninger.
+
+## Vekting
+
+Når du ser på status, kan du angi hvor mange personer det er i hver husholdning.
+
+Eksempel:
+
+- Husholdning A = 9
+- Husholdning B = 1
+
+Da fordeles alle utgifter 90/10 i stedet for 50/50.
+
+Vektingen lagres lokalt i nettleseren og brukes kun i utregningen. Selve loggen lagrer bare hvem som betalte, beskrivelse og NOK for utgiftene.
 
 ## Dataformat
 
 Data lagres som JSONL, altså én JSON-hendelse per linje.
 
-Dette gjør at filen fungerer som en enkel append-only logg. Gamle hendelser trenger normalt ikke endres. Nye personer og utgifter legges til som nye linjer.
+Dette gjør at filen fungerer som en enkel append-only logg. Gamle hendelser trenger normalt ikke endres. Nye husholdninger og utgifter legges til som nye linjer.
 
-### Person-hendelse
+### Husholdnings-hendelse
 
 ```json
 {
   "id": "uuid",
-  "type": "person.added",
-  "personId": "eskil",
-  "name": "Eskil",
+  "type": "household.added",
+  "householdId": "familien-eskil",
+  "name": "Familien Eskil",
   "createdAt": "2026-07-06T12:00:00.000Z"
 }
 ```
@@ -118,13 +130,10 @@ Dette gjør at filen fungerer som en enkel append-only logg. Gamle hendelser tre
 {
   "id": "uuid",
   "type": "expense.added",
-  "paidBy": "eskil",
-  "amount": 420,
+  "household": "familien-eskil",
+  "name": "Familien Eskil",
+  "nok": 420,
   "description": "Middag",
-  "shares": {
-    "eskil": 1,
-    "anna": 1
-  },
   "createdAt": "2026-07-06T18:00:00.000Z"
 }
 ```
@@ -152,14 +161,12 @@ Kjente begrensninger:
 * ingen innlogging utover GitHub-token
 * ingen avansert konflikthåndtering
 * ingen sletting eller redigering av utgifter i brukergrensesnittet
-* flervalg kan være litt knotete på mobil
-* saldo viser foreløpig bare netto balanse per person
+* saldo viser foreløpig bare netto balanse per husholdning
 
 ## Utviklingsidé
 
 Mulige neste steg:
 
-* bedre mobil-UI for valg av deltagere
 * oppgjørsforslag: "Anna betaler 140 NOK til Eskil"
 * redigering/sletting via nye korrigerende hendelser
 * eksport/import
