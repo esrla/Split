@@ -230,7 +230,7 @@ function householdsFromEvents(events) {
 }
 
 function getHouseholdWeight(householdId) {
-  return normalizePositiveNumber(householdWeights[householdId], 1);
+  return positiveNumberOr(householdWeights[householdId], 1);
 }
 
 function calculateBalances(events, households) {
@@ -240,7 +240,7 @@ function calculateBalances(events, households) {
     if (event.type !== "expense.added") continue;
 
     const payerId = event.household;
-    const amount = normalizePositiveNumber(event.nok);
+    const amount = positiveNumberOr(event.nok);
     if (!payerId || !amount) continue;
 
     const totalWeight = households.reduce((sum, household) => sum + getHouseholdWeight(household.id), 0);
@@ -269,14 +269,12 @@ function render() {
     .join("");
 
   els.weights.innerHTML = households.length
-    ? `<p class="muted">Angi hvor mange personer det er i hver husholdning.</p><ul>${households.map(household => (
-      `<li><label for="weight-${escapeHtml(household.id)}">${escapeHtml(household.name)}</label><input id="weight-${escapeHtml(household.id)}" data-household-weight="${escapeHtml(household.id)}" type="number" min="1" step="1" value="${escapeHtml(String(getHouseholdWeight(household.id)))}"></li>`
-    )).join("")}</ul>`
+    ? `<p class="muted">Angi hvor mange personer det er i hver husholdning.</p><ul>${households.map(renderWeightInput).join("")}</ul>`
     : "<p class='muted'>Legg til minst én husholdning for å sette vekting.</p>";
 
   els.weights.querySelectorAll("[data-household-weight]").forEach(input => {
     input.oninput = event => {
-      householdWeights[event.target.dataset.householdWeight] = normalizePositiveNumber(event.target.value, 1);
+      householdWeights[event.target.dataset.householdWeight] = positiveNumberOr(event.target.value, 1);
       saveHouseholdWeights();
       render();
     };
@@ -297,7 +295,15 @@ function formatMoney(value) {
   return `${value.toFixed(2)} NOK`;
 }
 
-function normalizePositiveNumber(value, fallback = 0) {
+function renderWeightInput(household) {
+  const id = `weight-${escapeHtml(household.id)}`;
+  const name = escapeHtml(household.name);
+  const value = escapeHtml(String(getHouseholdWeight(household.id)));
+  const householdId = escapeHtml(household.id);
+  return `<li><label for="${id}">${name}</label><input id="${id}" data-household-weight="${householdId}" type="number" min="1" step="1" value="${value}"></li>`;
+}
+
+function positiveNumberOr(value, fallback = 0) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
@@ -354,7 +360,7 @@ els.addHousehold.onclick = async () => {
 
 els.addExpense.onclick = async () => {
   const paidBy = els.paidBy.value;
-  const amount = normalizePositiveNumber(els.amount.value);
+  const amount = positiveNumberOr(els.amount.value);
   const description = els.description.value.trim();
 
   if (!paidBy) {

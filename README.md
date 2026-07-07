@@ -99,8 +99,8 @@ Når du ser på status, kan du angi hvor mange personer det er i hver husholdnin
 
 Eksempel:
 
-* Husholdning A = 9
-* Husholdning B = 1
+- Husholdning A = 9
+- Husholdning B = 1
 
 Da fordeles alle utgifter 90/10 i stedet for 50/50.
 
