@@ -218,11 +218,10 @@ function householdsFromEvents(events) {
 
   for (const event of events) {
     if (event.type === "household.added") households.set(event.householdId, event.name);
-    if (event.type === "person.added") households.set(event.personId, event.name);
 
     if (event.type === "expense.added") {
-      const householdId = event.household || event.paidBy;
-      const householdName = event.householdName || event.name || householdId;
+      const householdId = event.household;
+      const householdName = event.name || householdId;
       households.set(householdId, householdName);
     }
   }
@@ -240,9 +239,9 @@ function calculateBalances(events, households) {
   for (const event of events) {
     if (event.type !== "expense.added") continue;
 
-    const payerId = event.household || event.paidBy;
-    const amount = normalizePositiveNumber(event.nok ?? event.amount);
-    if (!amount) continue;
+    const payerId = event.household;
+    const amount = normalizePositiveNumber(event.nok);
+    if (!payerId || !amount) continue;
 
     const totalWeight = households.reduce((sum, household) => sum + getHouseholdWeight(household.id), 0);
     if (!totalWeight) continue;
@@ -271,7 +270,7 @@ function render() {
 
   els.weights.innerHTML = households.length
     ? `<p class="muted">Angi hvor mange personer det er i hver husholdning.</p><ul>${households.map(household => (
-      `<li><label>${escapeHtml(household.name)}<input data-household-weight="${escapeHtml(household.id)}" type="number" min="1" step="1" value="${escapeHtml(String(getHouseholdWeight(household.id)))}"></label></li>`
+      `<li><label for="weight-${escapeHtml(household.id)}">${escapeHtml(household.name)}</label><input id="weight-${escapeHtml(household.id)}" data-household-weight="${escapeHtml(household.id)}" type="number" min="1" step="1" value="${escapeHtml(String(getHouseholdWeight(household.id)))}"></li>`
     )).join("")}</ul>`
     : "<p class='muted'>Legg til minst én husholdning for å sette vekting.</p>";
 
