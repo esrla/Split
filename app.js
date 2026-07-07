@@ -59,7 +59,7 @@ function apiUrl(includeRef = true) {
 
 function headers() {
   return {
-    Authorization: `${"Bearer "}${getConfig().token}`,
+    Authorization: "Bearer ".concat(getConfig().token),
     Accept: "application/vnd.github+json",
     "X-GitHub-Api-Version": "2022-11-28"
   };
@@ -300,7 +300,7 @@ function renderWeightInput(household) {
   const name = escapeHtml(household.name);
   const value = escapeHtml(String(getHouseholdWeight(household.id)));
   const householdId = escapeHtml(household.id);
-  return `<li><label for="${id}">${name}</label><input id="${id}" data-household-weight="${householdId}" type="number" min="1" step="1" value="${value}" aria-label="Antall personer i ${name}"></li>`;
+  return `<li><label for="${id}">${name}</label><input id="${id}" data-household-weight="${householdId}" type="number" min="1" step="1" value="${value}"></li>`;
 }
 
 function parsePositiveNumberOr(value, fallback = 0) {
