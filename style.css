@@ -10,6 +10,16 @@ body {
 
 h1, h2 { margin-bottom: 8px; }
 
+summary {
+  font-size: 1.5em;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+details > :not(summary) {
+  margin-top: 8px;
+}
+
 label {
   display: block;
   margin-top: 12px;

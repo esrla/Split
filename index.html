@@ -11,83 +11,94 @@
   <p class="muted">Serverløs utgiftsdeling med GitHub som lagring.</p>
 
   <section class="card">
-    <h2>Oppsett</h2>
+    <details open>
+      <summary>Oppsett</summary>
 
-    <label>
-      GitHub-repo for lagring
-      <input id="repoUrl" value="https://github.com/esrla/Frankrike2026">
-    </label>
+      <label>
+        GitHub-repo for lagring
+        <input id="repoUrl" value="https://github.com/esrla/Frankrike2026">
+      </label>
 
-    <label>
-      Branch
-      <input id="branch" value="main">
-    </label>
+      <label>
+        Branch
+        <input id="branch" value="main">
+      </label>
 
-    <label>
-      GitHub-token
-      <input id="token" type="password" placeholder="github_pat_...">
-    </label>
+      <label>
+        GitHub-token
+        <input id="token" type="password" placeholder="github_pat_...">
+      </label>
 
-    <div class="row">
-      <button id="saveSettings">Lagre oppsett</button>
-      <button id="loadLedger">Last data</button>
-    </div>
+      <div class="row">
+        <button id="saveSettings">Lagre oppsett</button>
+        <button id="loadLedger">Last data</button>
+      </div>
 
-    <p class="small muted">
-      Token lagres kun lokalt i nettleseren på denne mobilen.
-    </p>
+      <p class="small muted">
+        Token lagres kun lokalt i nettleseren på denne mobilen.
+      </p>
+    </details>
   </section>
 
   <section class="card">
-    <h2>Husholdninger</h2>
+    <details open>
+      <summary>Husholdninger</summary>
 
-    <label>
-      Navn
-      <input id="householdName" placeholder="">
-    </label>
+      <label>
+        Navn
+        <input id="householdName" placeholder="">
+      </label>
 
-    <button id="addHousehold">Legg til husholdning</button>
+      <button id="addHousehold">Legg til husholdning</button>
 
-    <ul id="households"></ul>
+      <ul id="households"></ul>
+    </details>
   </section>
 
   <section class="card">
-    <h2 id="expenseFormTitle">Ny utgift</h2>
+    <details open>
+      <summary id="expenseFormTitle">Ny utgift</summary>
 
-    <label>
-      Betalt av
-      <select id="paidBy"></select>
-    </label>
+      <label>
+        Betalt av
+        <select id="paidBy"></select>
+      </label>
 
-    <label>
-      Beløp (NOK)
-      <input id="amount" type="number" inputmode="decimal" placeholder="">
-    </label>
+      <label>
+        Beløp (NOK)
+        <input id="amount" type="number" inputmode="decimal" placeholder="">
+      </label>
 
-    <label>
-      Beskrivelse
-      <input id="description" placeholder="">
-    </label>
+      <label>
+        Beskrivelse
+        <input id="description" placeholder="">
+      </label>
 
-    <div class="row">
-      <button id="addExpense">Legg til utgift</button>
-      <button id="cancelEdit" style="display:none">Avbryt</button>
-    </div>
+      <div class="row">
+        <button id="addExpense">Legg til utgift</button>
+        <button id="cancelEdit" style="display:none">Avbryt</button>
+      </div>
 
-    <p class="small muted">
-      Alle utgifter deles automatisk mellom alle husholdninger etter vektingen under.
-    </p>
+      <p class="small muted">
+        Alle utgifter deles automatisk mellom alle husholdninger etter vektingen under.
+      </p>
+    </details>
   </section>
 
   <section class="card">
-    <h2>Utgifter</h2>
-    <ul id="expenses" class="small"></ul>
+    <details open>
+      <summary>Utgifter</summary>
+      <ul id="expenses" class="small"></ul>
+    </details>
   </section>
 
   <section class="card">
-    <h2>Status</h2>
-    <div id="weights" class="small"></div>
-    <div id="balances" class="small"></div>
+    <details open>
+      <summary>Status</summary>
+      <div id="weights" class="small"></div>
+      <div id="balances" class="small"></div>
+      <div id="settlements" class="small"></div>
+    </details>
   </section>
 
   <p id="status" class="muted"></p>
