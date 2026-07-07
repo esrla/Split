@@ -332,7 +332,7 @@ function renderExpenseItem(event, households) {
   const id = escapeHtml(event.id);
   const name = escapeHtml(displayName(households, event.household));
   const desc = escapeHtml(event.description || "");
-  const amount = escapeHtml(formatMoney(event.nok));
+  const amount = formatMoney(event.nok);
   return `<li class="expense-item">
     <span class="expense-text">${desc} — ${amount} <span class="muted">(${name})</span></span>
     <span class="expense-actions">
@@ -364,12 +364,16 @@ function startEditExpense(expenseId) {
   els.amount.value = event.nok;
   els.description.value = event.description || "";
 
-  els.expenseFormTitle.scrollIntoView({ behavior: "smooth", block: "start" });
+  els.expenseFormTitle.scrollIntoView({
+    behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
+    block: "start"
+  });
   render();
 }
 
 function cancelEditExpense() {
   editingExpenseId = null;
+  els.paidBy.value = "";
   els.amount.value = "";
   els.description.value = "";
   render();
