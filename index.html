@@ -39,16 +39,16 @@
   </section>
 
   <section class="card">
-    <h2>Personer</h2>
+    <h2>Husholdninger</h2>
 
     <label>
       Navn
-      <input id="personName" placeholder="">
+      <input id="householdName" placeholder="">
     </label>
 
-    <button id="addPerson">Legg til person</button>
+    <button id="addHousehold">Legg til husholdning</button>
 
-    <ul id="people"></ul>
+    <ul id="households"></ul>
   </section>
 
   <section class="card">
@@ -69,20 +69,16 @@
       <input id="description" placeholder="">
     </label>
 
-    <label>
-      Delt mellom
-      <select id="participants" multiple></select>
-    </label>
-
     <button id="addExpense">Legg til utgift</button>
 
     <p class="small muted">
-      Tips: På mobil kan flervalg være litt kronglete. Hvis ingen er valgt, deles utgiften mellom alle.
+      Alle utgifter deles automatisk mellom alle husholdninger etter vektingen under.
     </p>
   </section>
 
   <section class="card">
     <h2>Status</h2>
+    <div id="weights" class="small"></div>
     <div id="balances" class="small"></div>
   </section>
 
