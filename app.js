@@ -231,8 +231,7 @@ function householdsFromEvents(events) {
 }
 
 function getHouseholdWeight(householdId) {
-  const weight = Number(householdWeights[householdId]);
-  return Number.isFinite(weight) && weight > 0 ? weight : 1;
+  return normalizePositiveNumber(householdWeights[householdId], 1);
 }
 
 function calculateBalances(events, households) {
@@ -242,8 +241,8 @@ function calculateBalances(events, households) {
     if (event.type !== "expense.added") continue;
 
     const payerId = event.household || event.paidBy;
-    const amount = Number(event.nok ?? event.amount);
-    if (!Number.isFinite(amount) || amount <= 0) continue;
+    const amount = normalizePositiveNumber(event.nok ?? event.amount);
+    if (!amount) continue;
 
     const totalWeight = households.reduce((sum, household) => sum + getHouseholdWeight(household.id), 0);
     if (!totalWeight) continue;
@@ -278,8 +277,7 @@ function render() {
 
   els.weights.querySelectorAll("[data-household-weight]").forEach(input => {
     input.oninput = event => {
-      const weight = Number(event.target.value);
-      householdWeights[event.target.dataset.householdWeight] = weight > 0 ? weight : 1;
+      householdWeights[event.target.dataset.householdWeight] = normalizePositiveNumber(event.target.value, 1);
       saveHouseholdWeights();
       render();
     };
@@ -298,6 +296,11 @@ function displayName(households, householdId) {
 
 function formatMoney(value) {
   return `${value.toFixed(2)} NOK`;
+}
+
+function normalizePositiveNumber(value, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 function slug(value) {
@@ -352,14 +355,14 @@ els.addHousehold.onclick = async () => {
 
 els.addExpense.onclick = async () => {
   const paidBy = els.paidBy.value;
-  const amount = Number(els.amount.value);
+  const amount = normalizePositiveNumber(els.amount.value);
   const description = els.description.value.trim();
 
   if (!paidBy) {
     setStatus("Velg hvem som betalte.", "error");
     return;
   }
-  if (!Number.isFinite(amount) || amount <= 0) {
+  if (!amount) {
     setStatus("Beløp må være større enn 0.", "error");
     return;
   }
