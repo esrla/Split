@@ -59,7 +59,7 @@ function apiUrl(includeRef = true) {
 
 function headers() {
   return {
-    Authorization: "Bearer " + getConfig().token,
+    Authorization: `${"Bearer "}${getConfig().token}`,
     Accept: "application/vnd.github+json",
     "X-GitHub-Api-Version": "2022-11-28"
   };
@@ -230,7 +230,7 @@ function householdsFromEvents(events) {
 }
 
 function getHouseholdWeight(householdId) {
-  return positiveNumberOr(householdWeights[householdId], 1);
+  return parsePositiveNumberOr(householdWeights[householdId], 1);
 }
 
 function calculateBalances(events, households) {
@@ -240,7 +240,7 @@ function calculateBalances(events, households) {
     if (event.type !== "expense.added") continue;
 
     const payerId = event.household;
-    const amount = positiveNumberOr(event.nok);
+    const amount = parsePositiveNumberOr(event.nok);
     if (!payerId || !amount) continue;
 
     const totalWeight = households.reduce((sum, household) => sum + getHouseholdWeight(household.id), 0);
@@ -274,7 +274,7 @@ function render() {
 
   els.weights.querySelectorAll("[data-household-weight]").forEach(input => {
     input.oninput = event => {
-      householdWeights[event.target.dataset.householdWeight] = positiveNumberOr(event.target.value, 1);
+      householdWeights[event.target.dataset.householdWeight] = parsePositiveNumberOr(event.target.value, 1);
       saveHouseholdWeights();
       render();
     };
@@ -300,10 +300,10 @@ function renderWeightInput(household) {
   const name = escapeHtml(household.name);
   const value = escapeHtml(String(getHouseholdWeight(household.id)));
   const householdId = escapeHtml(household.id);
-  return `<li><label for="${id}">${name}</label><input id="${id}" data-household-weight="${householdId}" type="number" min="1" step="1" value="${value}"></li>`;
+  return `<li><label for="${id}">${name}</label><input id="${id}" data-household-weight="${householdId}" type="number" min="1" step="1" value="${value}" aria-label="Antall personer i ${name}"></li>`;
 }
 
-function positiveNumberOr(value, fallback = 0) {
+function parsePositiveNumberOr(value, fallback = 0) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
@@ -360,7 +360,7 @@ els.addHousehold.onclick = async () => {
 
 els.addExpense.onclick = async () => {
   const paidBy = els.paidBy.value;
-  const amount = positiveNumberOr(els.amount.value);
+  const amount = parsePositiveNumberOr(els.amount.value);
   const description = els.description.value.trim();
 
   if (!paidBy) {
