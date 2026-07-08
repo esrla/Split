@@ -38,7 +38,8 @@ render();
   if (localStorage.getItem("split.token")) {
     try {
       await loadLedger();
-    } catch {
+    } catch (err) {
+      console.error("Auto-load failed:", err);
       els.detailsOppsett.open = true;
     }
   }
