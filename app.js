@@ -22,7 +22,8 @@ const els = {
   weights: $("weights"),
   balances: $("balances"),
   settlements: $("settlements"),
-  status: $("status")
+  status: $("status"),
+  detailsOppsett: $("detailsOppsett")
 };
 
 let fileSha = null;
@@ -32,6 +33,17 @@ let editingExpenseId = null;
 
 loadSettings();
 render();
+
+(async () => {
+  if (localStorage.getItem("split.token")) {
+    try {
+      await loadLedger();
+    } catch (err) {
+      console.error("Auto-load failed:", err);
+      els.detailsOppsett.open = true;
+    }
+  }
+})();
 
 function setStatus(message, type = "muted") {
   els.status.className = type;
